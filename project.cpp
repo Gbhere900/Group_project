@@ -1,405 +1,486 @@
+#define _CRT_SECURE_NO_WARNINGS
+#define TIME 300
+#define MAX_SIZE 9
+
 #include <stdio.h>
 #include <stdlib.h>
-#include<conio.h>
-#include<time.h>
+#include <conio.h>
+#include <time.h>
+#include <vector>
+#include <thread>
+#include <chrono>
+#include <iostream>
+using namespace std;
 
 int map_size = 1;
-int mouse_x = 0, mouse_y = 0; // 老鼠坐标
-int granary_x = 0, granary_y = 0;		//粮仓坐标
+int mouse_x = 0, mouse_y = 0;                 // 老鼠移动中的坐标
+int mouse_initial_x = 0, mouse_initial_y = 0; // 老鼠初始位置(逻辑)
+int granary_x = 0, granary_y = 0;             // 粮仓初始位置
 
-int maze[9][9];           // 地图最大尺寸
+int map[MAX_SIZE][MAX_SIZE]; // 地图最大尺寸
 
-struct best               // 用于记录最短路径的结构体
+int path_number; // 正确路线个数
+
+pair<int, int> temp_pair;
+vector<pair<int, int>> best_path;
+vector<pair<int, int>> path;
+int shortest_distance = 1e9; // vector容器用于求最短路径的函数
+
+// 打印地图
+void print_map(int a, int x = mouse_x, int y = mouse_y) // int mouse_x,int mouse_y用于防止显示bug
 {
-    int min;
-    int b[9][9];
-} best_path;
+    for (int i = 0; i < map_size; i++)
+    {
+        for (int j = 0; j < map_size; j++)
+        {
+            if (map[i][j] == 2)
+            {
+                printf("墙");
+            }
 
-int route_number;         // 正确路线个数
-
-//打印地图
-print_map(int a)
-{
-	for (int i = 0; i < A; i++)
-	{
-		for (int j = 0; j < A; j++)
-		{
-			if (maze[i][j] == 2)
-				cout << "■";  //■代表墙体
-			else if (maze[i][j] == 1)
-				cout << "鼠";  //代表老鼠
-			else if (maze[i][j] == 3)
-				cout << "粮";  //代表粮食
-			else
-				cout << "  ";
-		}
-		cout << endl;
-	}
+            else if (map[i][j] == 1 && i == x && j == y)
+            {
+                printf("鼠");
+            }
+            else if (map[i][j] == 3)
+            {
+                printf("仓");
+            }
+            else
+            {
+                printf("  ");
+            }
+        }
+        printf("\n");
+    }
 }
 
-//新建地图，并存入文件
-void create_plat(int a)
+// 新建地图，并存入txt文件
+void create_map(int a)
 {
-	A = a;
+    map_size = a;
 
-	int i, j, s;
-	int input_correct = 0; //不用goto语句实现用户输入错误时的返回
+    int i, j, s;
+error_1:
+    printf("请输入0和2,0代表通路，2代表墙体(数字用空格隔开)，输入规格是%dx%d\n", map_size, map_size);
+    for (i = 1; i <= map_size; i++)
+    {
+        printf("第%d行:", i);
+        for (j = 1; j <= map_size; j++)
+        {
+            scanf_s("%d", &s);
+            if (s == 0 || s == 2)
+                map[i - 1][j - 1] = s;
+            else
+            {
+                system("cls");
+                printf("----输入错误请重新输入----\n");
+                goto error_1;
+            }
+        }
+    }
 
-	while (!input_correct = 0)
-	{
-		//2代表墙体，0代表通路
-		cout << "请输入0和2,0代表通路，2代表墙体(数字用空格隔开)，输入规格是1×1" << endl;
-		for (i = 1; i <= A; i++)
-		{
-			cout << "第" << i << "行";
-			for (j = 1; j <= A; j++)
-			{
-				cin >> s;
-				if (s == 0 || s == 2)
-					maze[i - 1][j - 1] = s;
-				else
-				{
-					input_correct = 0;
-					system("cls");
-					cout << "——————输入错误，请重新输入——————" << endl;
-				}
-			}
-			if (!input_correct) break;
-		}
+error_2:
+    printf("请设置老鼠的初始位置(x, y)（1-%d,1-%d）:\n", map_size, map_size);
 
-	}
+    for (i = 0; i < 30; i++) // 清除缓存字符
+        fflush(stdin);
 
-	while (!input_correct = 0)
-	{
-		//1代表老鼠
-		cout << "请设置老鼠的初始位置(x, y),注意x,y取值范围为1~" << a << endl;
+    scanf_s("%d,%d", &mouse_initial_x, &mouse_initial_y);
+    if (mouse_initial_x <= map_size && mouse_initial_y <= map_size && mouse_initial_x > 0 && mouse_initial_y > 0)
+        map[mouse_initial_x - 1][mouse_initial_y - 1] = 1;
+    else
+    {
+        system("cls");
+        printf("----输入错误，请重新输入,在%dx%d的范围内----\n", map_size, map_size);
+        goto error_2;
+    }
 
-		//清除来自键盘的缓存字符，防止死循环bug
-		for (i = 0; i < 30; i++)
-			fflush(stdin);			//flush一下
+error_3:
+    printf("请设置粮仓的位置(x, y):\n");
+    for (i = 0; i < 30; i++) // 清除缓存字符
+        fflush(stdin);
 
-		cin >> mouse_x >> mouse_y;
-		if (mouse_x <= A && mouse_y <= A && mouse_x > 0 && mouse_y > 0)
-			maze[mouse_x - 1][mouse_y - 1] = 1;
-		else
-		{
-			input_correct = 0;
-			system("cls");
-			cout << "——————输入错误，请重新输入——————" << endl;
-		}
-	}
+    scanf_s("%d,%d", &granary_x, &granary_y);
+    if (granary_x <= map_size && granary_y <= map_size && granary_x > 0 && granary_y > 0 && (granary_x != mouse_initial_x || granary_y != mouse_initial_y))
+        map[granary_x - 1][granary_y - 1] = 3;
+    else
+    {
+        system("cls");
+        printf("----输入错误，请重新输入,在%dx%d的范围内----\n", map_size, map_size);
+        goto error_3;
+    }
 
-	while (!input_correct = 0)
-	{
-		//3代表粮食
-		cout << "请设置粮仓的位置(x, y):" << endl;
+    // 文件保存地图
+    FILE* fp;
+    fp = fopen("map.txt", "w");
+    for (i = 0; i < map_size; i++)
+    {
+        for (j = 0; j < map_size; j++)
+        {
+            fprintf(fp, "%d\t", map[i][j]);
+        }
+        fprintf(fp, "%c", '\n');
+    }
+    fprintf(fp, "%d\t", mouse_initial_x);
+    fprintf(fp, "%d\t", mouse_initial_y);
+    fprintf(fp, "%d\t", granary_x);
+    fprintf(fp, "%d\t", granary_y);
+    fprintf(fp, "%d\t", map_size);
+    fclose(fp);
 
-		//清除来自键盘的缓存字符，防止死循环bug
-		for (i = 0; i < 30; i++)
-			fflush(stdin);			//flush一下
-
-		cin >> granary_x >> granary_y;
-		if (granary_x <= A && granary_y <= A && granary_x > 0 && granary_y > 0)
-			maze[granary_x - 1][granary_y - 1] = 3;
-		else
-		{
-			input_correct = 0;
-			system("cls");
-			cout << "——————输入错误，请重新输入——————" << endl;
-		}
-	}
-
-	//保存用户创建地图到文件
-	FILE* fp;
-	fp = fopen("map.txt", "w");	   //w只写，会清除再写
-	for (i = 0; i < A; i++)
-	{
-		for (j = 0; j < A; j++)
-		{
-			fprintf << (fp, "%d\t", maze[i][j]);
-		}
-		fprintf << (fp, "%c", '\n');
-	}
-	fprintf << (fp, "%d\t", p);
-	fprintf << (fp, "%d\t", q);
-	fprintf << (fp, "%d\t", x);
-	fprintf << (fp, "%d\t", y);
-	fprintf << (fp, "%d\t", A);
-	fclose(fp);
-
-	cout << "——————新建地图完成,保存成功！—————" << endl;
-	system("pause");
+    printf("----地图新建完成,并保存在同目录下的txt文件中----\n");
+    system("pause");
 }
 
-//从文件中获取地图，读入程序
+// 从txt获取地图，读入程序中
 void get_map(int a)
 {
-	A = a;
-	int i, j;
-	FILE* fp;
-	fp = fopen("map.txt", "r");
-	if (!fp)
-	{
-		cout << "文件不存在，请重新打开" << endl;
-		system("pause");
-	}
-	else
-	{
-		for (i = 0; i < A; i++)
-		{
-			for (j = 0; j < A; j++)
-			{
-				fscanf(fp, "%d\t", &maze[i][j]);
-			}
-			fscanf(fp, "\n");
-		}
-		fscanf(fp, "%d\t", &p);
-		fscanf(fp, "%d\t", &q);    //读取老鼠的位置
-		fscanf(fp, "%d\t", &x);
-		fscanf(fp, "%d\t", &y);    //读取粮仓的位置
-		fscanf(fp, "%d\t", &A);
-		cout << ("��ȡ�ɹ�����鿴�µ�ͼ��\n");
-		print_map(A);
-		system("pause");
-	}
-	fclose(fp);
-
+    map_size = a;
+    int i, j;
+    FILE* fp;
+    fp = fopen("map.txt", "r");
+    if (!fp)
+    {
+        printf("文件不存在，请重新打开\n");
+        system("pause");
+    }
+    else
+    {
+        for (i = 0; i < map_size; i++)
+        {
+            for (j = 0; j < map_size; j++)
+            {
+                fscanf(fp, "%d\t", &map[i][j]);
+            }
+            fscanf(fp, "\n");
+        }
+        fscanf(fp, "%d\t", &mouse_initial_x);
+        fscanf(fp, "%d\t", &mouse_initial_y); // 读取老鼠的位置
+        fscanf(fp, "%d\t", &granary_x);
+        fscanf(fp, "%d\t", &granary_y); // 读取粮仓的位置
+        fscanf(fp, "%d\t", &map_size);  // 读取地图大小
+        printf("读取成功，请查看新地图！\n");
+        print_map(map_size);
+        system("pause");
+    }
+    fclose(fp);
 }
 
-//修改地图模块
+// 修改地图函数
 void alter_map()
 {
-	int i, j, select, a, b;
-	FILE* fp;
-	while (1)
-	{
-		system("cls");
+    int i, j, select, a, b;
+    FILE* fp;
+    while (1)
+    {
+        system("cls");
 
-		print_map(A); //��ʾ��ͼ
+        print_map(map_size); // 显示地图
 
-		cout << " =============————修改地图————=============" << endl;
-		cout << " |请选择具体内容：                              |" << endl
-			cout << " |              1.修改为墙体                    |" << endl;
-		cout << " |              2.修改为通路                    |" << endl;
-		cout << " |              3.保存修改地图                  |" << endl;
-		cout << " |              0.退出修改功能                  |" << endl;
-		cout << " =========（请输入相应数字执行其功能）=========" << endl;
-		fflush(stdin);  //清除键入的缓存
-		cin >> select;
+        printf("  =============----修改地图------===================\n");
+        printf(" |请选择：                                          |\n");
+        printf(" |              1.修改为墙体；                      |\n");
+        printf(" |              2.修改为通路；                      |\n");
+        printf(" |              3.保存修改地图；                    |\n");
+        printf(" |              0.退出修改功能；                    |\n");
+        printf("  ===========（请输入相应数字执行其功能）===========\n");
+        fflush(stdin); // 清除键入的缓存
+        scanf("%d", &select);
+        for (i = 0; i < 30; i++)
+            fflush(stdin);
+        if (select < 4 && select > 0)
+        {
+            switch (select)
+            {
+            case 1:
+                printf("围墙内为修改范围，范围是%dx%d\n", map_size, map_size);
+                printf("请输入坐标 x, y 修改地图:\n");
 
-		if (select < 4 && select >= 0)
-		{
-			switch (select)
-			{
-			case 1:	cout << "围墙内为修改范围，注意范围为" << A << 'x' << A << endl;
-				cout << "请输入要修改的地图坐标(x, y):" << endl;
-				//清除来自键盘的缓存字符，防止死循环bug
-				for (i = 0; i < 30; i++)
-					fflush(stdin);
-				cin >> a >> b;
-				if (a <= A && b <= A && a > 0 && b > 0 && maze[a][b] != 1 && maze[a][b] != 3)
-					maze[a - 1][b - 1] = 2;
-				else
-				{
-					cout << "不能在围墙、粮仓和老鼠的位置修改！请重新输入：" << endl;
-					system("pause");
-				}
-				break;
-			case 2:	cout << "围墙内为修改范围，注意范围为" << A << 'x' << A << endl;
-				cout << "请输入要修改的地图坐标(x, y):" << endl;
-				//清除来自键盘的缓存字符，防止死循环bug
-				for (i = 0; i < 30; i++)
-					fflush(stdin);
-				cin >> a >> b;
-				if (a <= A && b <= A && a > 0 && b > 0 && maze[a][b] != 1 && maze[a][b] != 3)
-					maze[a - 1][b - 1] = 0;
-				else
-				{
-					cout << "不能在围墙、粮仓和老鼠的位置修改！请重新输入：" << endl;
-					system("pause");
-				}
-				break;
-			case 3:
-			{
-				//修改后地图保存到文件
-				fp = fopen("map.txt", "w");
-				for (i = 0; i < A; i++)
-				{
-					for (j = 0; j < A; j++)
-						fprintf << (fp, "%d\t", maze[i][j]);
-					fprintf << (fp, "%c", '\n');
-				}
-				fprintf << (fp, "%d\t", p);
-				fprintf << (fp, "%d\t", q);
-				fprintf << (fp, "%d\t", x);
-				fprintf << (fp, "%d\t", y);
-				fclose(fp);
+                // 清除缓存字符
+                for (i = 0; i < 30; i++)
+                    fflush(stdin);
 
-				cout << "——————地图修改完成,保存成功！—————" << endl;
-				system("pause");
-			}
-			break;
-			case 0: break;
-			}
-		}
-		else
-		{
-			cout << "——————请按规定输入！—————" << endl;
-			system("pause");
-		}
+                cin >> a >> b;
+                if (a < map_size && b < map_size && a > 1 && b > 1 && map[a - 1][b - 1] != 1 && map[a - 1][b - 1] != 3)
+                    map[a - 1][b - 1] = 2;
+                else
+                {
+                    printf("输入错误，请重新输入，不能在围墙、粮仓和老鼠的位置修改哦\n");
+                    system("pause");
+                }
+                break;
+            case 2:
+                printf("围墙内为修改范围，范围是%dx%d\n", map_size, map_size);
+                printf("请输入坐标 x, y 修改地图:\n");
+                // 清除缓存字符
+                for (i = 0; i < 30; i++)
+                    fflush(stdin);
 
-		if (select == 0)
-			break;
-	}
+                cin >> a >> b;
+                if (a < map_size && b < map_size && a > 1 && b > 1 && map[a - 1][b - 1] != 1 && map[a - 1][b - 1] != 3)
+                    map[a - 1][b - 1] = 0;
+                else
+                {
+                    printf("输入错误，请重新输入，不能在围墙、粮仓和老鼠的位置修改哦\n");
+                    system("pause");
+                }
+                break;
+            case 3: // 文件形式保存修改后地图
+                fp = fopen("map.txt", "w");
+                for (i = 0; i < map_size; i++)
+                {
+                    for (j = 0; j < map_size; j++)
+                        fprintf(fp, "%d\t", map[i][j]);
+                    fprintf(fp, "%c", '\n');
+                }
+                fprintf(fp, "%d\t", mouse_initial_x);
+                fprintf(fp, "%d\t", mouse_initial_y);
+                fprintf(fp, "%d\t", granary_x);
+                fprintf(fp, "%d\t", granary_y);
+                fclose(fp);
+
+                printf("----地图修改完成,并保存在同目录下的txt文件中----\n");
+                system("pause");
+                break;
+            case 0:
+                break;
+            }
+        }
+        else
+        {
+            printf("----请按规定输入----\n");
+            system("pause");
+        }
+
+        if (select == 0)
+            break;
+    }
 }
-
 
 // 开始游戏
 void game()
 {
-    mouse_x = granary_x - 1;
-    mouse_y = granary_y - 1;
-    int i, j, valid_move = 0, elapsed_time = 0;          // elapsed_time为已用时间
-    char input_char;
-    time_t start_time, end_time;                // 时间类型
-    start_time = time(NULL);
-
-    print_map(map_size);
-    printf("（按w↑s↓a← d→移动）\n----请在15秒内通关----\n");
+    mouse_x = mouse_initial_x - 1;
+    mouse_y = mouse_initial_y - 1;
+    int i, j, v = 0, t = 0; // t为初始时间
+    char str;
+    time_t start, end; // 定义时间类型变量
+    start = time(NULL);
+    print_map(map_size, mouse_x, mouse_y);
+    printf("（按w a s d移动）\n----请在30秒内通关----\n"); // 初始化地图
 
     while (1)
     {
-        printf("时间：%d\r", elapsed_time);
-
-        if (_kbhit()) // 输入控制
+        printf("时间：%d\r", t);
+        if (_kbhit()) // 输入控制,检查键盘有无输入，有非0，无1
         {
-            input_char = _getch();
-            if (input_char == 'w' && maze[mouse_x - 1][mouse_y] != 1) // 上
+            str = _getch();
+            if (str == 'w') // 上
             {
-                if (maze[mouse_x - 1][mouse_y] == 0)
+                if (map[mouse_x - 1][mouse_y] == 0)
                 {
-                    maze[mouse_x - 1][mouse_y] = 1;
-                    maze[mouse_x][mouse_y] = 0;
-                    mouse_x -= 1;
+                    map[mouse_x - 1][mouse_y] = 1;
+                    map[mouse_x][mouse_y] = 0;
+                    mouse_x = mouse_x - 1;
                 }
-                else if (maze[mouse_x - 1][mouse_y] == 3)
+                else if (map[mouse_x - 1][mouse_y] == 3)
                 {
-                    maze[mouse_x][mouse_y] = 0;
-                    valid_move = 1;
+                    map[mouse_x][mouse_y] = 0;
+                    v = 1;
                 }
             }
-            else if (input_char == 's' && maze[mouse_x + 1][mouse_y] != 1) // 下
+            else if (str == 's') // 下
             {
-                if (maze[mouse_x + 1][mouse_y] == 0)
+                if (map[mouse_x + 1][mouse_y] == 0)
                 {
-                    maze[mouse_x + 1][mouse_y] = 1;
-                    maze[mouse_x][mouse_y] = 0;
-                    mouse_x += 1;
+                    map[mouse_x + 1][mouse_y] = 1;
+                    map[mouse_x][mouse_y] = 0;
+                    mouse_x = mouse_x + 1;
                 }
-                else if (maze[mouse_x + 1][mouse_y] == 3)
+                else if (map[mouse_x + 1][mouse_y] == 3)
                 {
-                    maze[mouse_x][mouse_y] = 0;
-                    valid_move = 1;
+                    map[mouse_x][mouse_y] = 0;
+                    v = 1;
                 }
             }
-            else if (input_char == 'a' && maze[mouse_x][mouse_y - 1] != 1) // 左
+            else if (str == 'a') // 左
             {
-                if (maze[mouse_x][mouse_y - 1] == 0)
+                if (map[mouse_x][mouse_y - 1] == 0)
                 {
-                    maze[mouse_x][mouse_y - 1] = 1;
-                    maze[mouse_x][mouse_y] = 0;
-                    mouse_y -= 1;
+                    map[mouse_x][mouse_y - 1] = 1;
+                    map[mouse_x][mouse_y] = 0;
+                    mouse_y = mouse_y - 1;
                 }
-                else if (maze[mouse_x][mouse_y - 1] == 3)
+                else if (map[mouse_x][mouse_y - 1] == 3)
                 {
-                    maze[mouse_x][mouse_y] = 0;
-                    valid_move = 1;
+                    map[mouse_x][mouse_y] = 0;
+                    v = 1;
                 }
             }
-            else if (input_char == 'd' && maze[mouse_x][mouse_y + 1] != 1) // 右
+            else if (str == 'd') // 右
             {
-                if (maze[mouse_x][mouse_y + 1] == 0)
+                if (map[mouse_x][mouse_y + 1] == 0)
                 {
-                    maze[mouse_x][mouse_y + 1] = 1;
-                    maze[mouse_x][mouse_y] = 0;
-                    mouse_y += 1;
+                    map[mouse_x][mouse_y + 1] = 1;
+                    map[mouse_x][mouse_y] = 0;
+                    mouse_y = mouse_y + 1;
                 }
-                else if (maze[mouse_x][mouse_y + 1] == 3)
+                else if (map[mouse_x][mouse_y + 1] == 3)
                 {
-                    maze[mouse_x][mouse_y] = 0;
-                    valid_move = 1;
+                    map[mouse_x][mouse_y] = 0;
+                    v = 1;
                 }
             }
+            else
+                ;
 
             system("cls");
-            printf("显示迷宫：\n");  // 显示游戏地图
             print_map(map_size);
-            printf("（按w↑s↓a← d→移动）\n请在15秒内通关☆(－ｏ⌒) \n");
+            printf("（按w a s d移动）\n请在30秒内通关 \n");
         }
+        else
+            ;
 
-        if (valid_move == 1) // 判断是否通关
+        if (v == 1) // 判断是否通关
         {
             printf("\n----恭喜通关----\n");
             system("pause");
             break;
         }
 
-        if (elapsed_time > 15) // 规定时间到后结束游戏
+        if (t > 29) // 规定时间到后结束游戏
         {
             printf("\n----未在规定时间内通关，游戏失败----\n");
-            maze[mouse_x][mouse_y] = 0;   // 清除最后所在位置
+            map[mouse_x][mouse_y] = 0; // 清除最后所在位置
             system("pause");
             break;
         }
 
-        end_time = time(NULL);
-        elapsed_time = difftime(end_time, start_time);
+        end = time(NULL);
+        t = difftime(end, start);
     }
-
 }
 
-void main()
+// 计算通路数函数
+void path_count_number(int m, int n, int distance)
+{
+
+    map[m][n] = 1;
+    temp_pair = pair<int, int>(m, n);
+    path.push_back(temp_pair);
+    if (map[m][n + 1] == 3 || map[m][n - 1] == 3 || map[m + 1][n] == 3 || map[m - 1][n] == 3) // 判断当前位置上下左右是否有粮仓
+    {
+        ++path_number; // 统计一个地图的所有可能性的次数
+        if (distance < shortest_distance)
+        {
+            shortest_distance = distance;
+            best_path = path;
+        }
+    }
+    // 递归
+    if (map[m][n + 1] == 0)
+        path_count_number(m, n + 1, distance + 1); // 右
+    if (map[m + 1][n] == 0)
+        path_count_number(m + 1, n, distance + 1); // 下
+    if (map[m][n - 1] == 0)
+        path_count_number(m, n - 1, distance + 1); // 左
+    if (map[m - 1][n] == 0)
+        path_count_number(m - 1, n, distance + 1); // 上
+
+    map[m][n] = 0; // 回溯
+    path.pop_back();
+}
+
+// 寻找通关路径函数
+void show_all_path(int m, int n)
+{
+    map[m][n] = 1;
+    temp_pair = pair<int, int>(m, n);
+    path.push_back(temp_pair);
+
+    if (map[m][n + 1] == 3 || map[m][n - 1] == 3 || map[m + 1][n] == 3 || map[m - 1][n] == 3) // 判断当前位置上下左右是否有粮仓
+    {
+        for (int i = 0; i < path.size(); i++)
+        {
+            map[path[i].first][path[i].second] = 1;
+            print_map(map_size, path[i].first, path[i].second);
+            std::this_thread::sleep_for(std::chrono::milliseconds(TIME)); // 控制每个字符的输出间隔
+            map[path[i].first][path[i].second] = 0;
+            system("cls");
+        }
+    }
+    // 递归
+    if (map[m][n + 1] == 0)
+        show_all_path(m, n + 1); // 右
+    if (map[m + 1][n] == 0)
+        show_all_path(m + 1, n); // 下
+    if (map[m][n - 1] == 0)
+        show_all_path(m, n - 1); // 左
+    if (map[m - 1][n] == 0)
+        show_all_path(m - 1, n); // 上
+
+    map[m][n] = 0; // 回溯
+    path.pop_back();
+}
+
+// 显示最优路径函数
+void path_best(int p, int q, int l)
+{
+    path_count_number(p, q, 0);
+    while (!best_path.empty())
+    {
+        map[best_path[0].first][best_path[0].second] = 1;
+        print_map(map_size, best_path[0].first, best_path[0].second);
+        std::this_thread::sleep_for(std::chrono::milliseconds(TIME)); // 控制每个字符的输出间隔
+        map[best_path[0].first][best_path[0].second] = 0;
+        best_path.erase(best_path.begin());
+        system("cls");
+    }
+}
+
+int main()
 {
     int select, k;
 
     while (1)
     {
         system("cls");
-        printf("  ================== 老鼠走迷宫游戏 ==================\n");
-        printf(" | 请选择：                                          |\n");
-        printf(" |              1. 获取地图；                        |\n");
-        printf(" |              2. 新建地图；                        |\n");
-        printf(" |              3. 查看地图；                        |\n");
-        printf(" |              4. 修改地图；                        |\n");
-        printf(" |              5. 显示通关路径数量；                |\n");
-        printf(" |              6. 显示最优路径；                    |\n");
-        printf(" |              7. 显示所有路径；                    |\n");
-        printf(" |              8. 开始游戏；                        |\n");
-        printf(" |              0. 退出系统；                        |\n");
-        printf("  =========== （请输入相应数字执行其功能）===========\n");
-
-        for (k = 0; k < 30; k++) fflush(stdin);  // 清除键盘输入的scanf缓存，防止死循环
+        printf("  =============老鼠走迷宫游戏 n.0===================\n");
+        printf(" |请选择：                                          |\n");
+        printf(" |              1.获取地图；                        |\n");
+        printf(" |              2.新建地图；                        |\n");
+        printf(" |              3.查看地图；                        |\n");
+        printf(" |              4.修改地图；                        |\n");
+        printf(" |              5.显示有几条通关路径；              |\n");
+        printf(" |              6.显示最优路径；                    |\n");
+        printf(" |              7.显示通关所有路径；                |\n");
+        printf(" |              8.开始游戏；                        |\n");
+        printf(" |              0.退出系统；                        |\n");
+        printf("  ===========（请输入相应数字执行其功能）===========\n");
+        for (k = 0; k < 30; k++)
+            fflush(stdin); // 清除缓存
 
         scanf_s("%d", &select);
-        if (select >= 0 && select <= 8)    // 键盘输入检错
+        if (select >= 0 && select <= 8) // 键盘输入检错
         {
             switch (select)
             {
             case 0:
                 exit(0);
             case 1:
-                system("cls");
-                get_map(9); // 从文件获取地图到程序
+                system("cls"); // 清除菜单
+                get_map(9);    // 从文件获取地图到程序
                 break;
             case 2:
                 system("cls");
                 printf("新的地图大小(小于9)：");
                 scanf_s("%d", &map_size);
-                create_plat(map_size);  // 新建地图
+                create_map(map_size); // 新建地图
                 break;
             case 3:
                 system("cls");
-                print_map(map_size);    // 显示地图
+                print_map(map_size, mouse_initial_x - 1, mouse_initial_y - 1); // 显示地图
                 system("pause");
                 break;
             case 4:
@@ -407,28 +488,26 @@ void main()
                 break;
             case 5:
                 system("cls");
-                path_result(mouse_x - 1, mouse_y - 1);
-                printf("有%d条通路\n", route_number);
-                route_number = 0;
+                path_count_number(mouse_initial_x - 1, mouse_initial_y - 1, 0);
+                printf("有%d条通路\n", path_number);
+                path_number = 0;
                 system("pause");
                 break;
             case 6:
                 system("cls");
-                best_path.min = 999;
-                path_result(mouse_x - 1, mouse_y - 1); // 统计地图所有解的个数
-                path_best(mouse_x - 1, mouse_y - 1, 1); // 寻找最短的路径
+                path_best(mouse_initial_x - 1, mouse_initial_y - 1, 1); // 寻找最短的路径
                 system("pause");
+                path_number = 0;
                 break;
             case 7:
                 system("cls");
-                path_find(mouse_x - 1, mouse_y - 1);  // 寻找所有通关路径
+                show_all_path(mouse_initial_x - 1, mouse_initial_y - 1); // 寻找所有通关路径
                 printf("----已显示所有路径!----\n");
                 system("pause");
                 break;
             case 8:
                 system("cls");
-                game(); // 开始游戏
-                break;
+                game();
             default:
                 break;
             }
@@ -440,6 +519,5 @@ void main()
             system("pause");
         }
     }
+    return 0;
 }
-
-
